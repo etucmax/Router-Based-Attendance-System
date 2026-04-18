@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}RBAS{% endblock %} – Router-Based Attendance System</title>
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+      <i class="bi bi-router-fill me-2"></i>RBAS
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#navMenu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMenu">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='index' %}active{% endif %}"
+             href="{{ url_for('index') }}"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if 'student' in request.endpoint %}active{% endif %}"
+             href="{{ url_for('students') }}"><i class="bi bi-people-fill me-1"></i>Students</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if 'session' in request.endpoint %}active{% endif %}"
+             href="{{ url_for('sessions') }}"><i class="bi bi-calendar3 me-1"></i>Sessions</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='attendance' or request.endpoint=='mark_attendance' %}active{% endif %}"
+             href="{{ url_for('attendance') }}"><i class="bi bi-clipboard-check me-1"></i>Attendance</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='scanner' %}active{% endif %}"
+             href="{{ url_for('scanner') }}"><i class="bi bi-wifi me-1"></i>Scanner</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if 'report' in request.endpoint %}active{% endif %}"
+             href="{{ url_for('reports') }}"><i class="bi bi-bar-chart-fill me-1"></i>Reports</a>
+        </li>
+      </ul>
+      <span class="navbar-text text-white-50 small">
+        <i class="bi bi-clock me-1"></i>
+        <span id="clock"></span>
+      </span>
+    </div>
+  </div>
+</nav>
+
+<!-- Flash messages -->
+<div class="container-fluid mt-3">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+</div>
+
+<!-- Page content -->
+<main class="container-fluid py-3">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="text-center text-muted small py-3 border-top mt-4">
+  Router-Based Attendance System &copy; 2024 &mdash; Final Project, Elective 2
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

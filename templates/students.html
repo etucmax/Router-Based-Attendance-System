@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Students{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="bi bi-people-fill me-2"></i>Students</h2>
+  <a href="{{ url_for('add_student') }}" class="btn btn-primary">
+    <i class="bi bi-person-plus me-1"></i>Add Student
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0" id="studentTable">
+      <thead class="table-primary">
+        <tr>
+          <th>#</th>
+          <th>Student ID</th>
+          <th>Name</th>
+          <th>Course</th>
+          <th>MAC Address</th>
+          <th>Registered</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><span class="badge bg-secondary">{{ s.student_id }}</span></td>
+          <td>{{ s.name }}</td>
+          <td>{{ s.course }}</td>
+          <td>
+            {% if s.mac_address %}
+              <code class="text-success">{{ s.mac_address }}</code>
+            {% else %}
+              <span class="text-muted fst-italic">Not set</span>
+            {% endif %}
+          </td>
+          <td class="text-muted small">{{ s.created_at[:10] }}</td>
+          <td>
+            <a href="{{ url_for('edit_student', sid=s.id) }}"
+               class="btn btn-sm btn-outline-secondary me-1">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form action="{{ url_for('delete_student', sid=s.id) }}"
+                  method="post" class="d-inline"
+                  onsubmit="return confirm('Delete {{ s.name }}?')">
+              <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">
+            No students yet. <a href="{{ url_for('add_student') }}">Add one</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

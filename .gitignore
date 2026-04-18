@@ -1,0 +1,8 @@
+# SQLite database (auto-created on first run)
+attendance.db
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+.env
