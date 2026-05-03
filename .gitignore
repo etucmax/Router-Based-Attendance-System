@@ -1,0 +1,13 @@
+# Python bytecode / caches
+__pycache__/
+*.pyc
+
+# Local database / runtime artifacts
+*.db
+
+# OS/editor noise
+.vscode/
+
+# Large course PDFs (keep the markdown docs instead)
+*.pdf
+

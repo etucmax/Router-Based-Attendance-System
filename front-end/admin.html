@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<!-- RBAMS admin UI: sidebar + sections (dashboard, events, sessions, attendance, users, reports, settings). Logic: admin.js. -->
+<html lang="en" class="scrollbar-none">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RBAMS — Dashboard</title>
+    <link rel="icon" href="assets/rbas-logo.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        fadeIn: 'fadeIn 0.45s ease forwards',
+                        pulseLive: 'pulseLive 1.5s infinite cubic-bezier(0.66, 0, 0, 1)',
+                        pulseShadow: 'pulseShadow 2s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(8px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        pulseLive: {
+                            '100%': { boxShadow: '0 0 0 20px rgba(113, 113, 122, 0)' },
+                        },
+                        pulseShadow: {
+                            '0%': { boxShadow: '0 0 0 0 rgba(255, 255, 255, 0.12)' },
+                            '70%': { boxShadow: '0 0 0 10px rgba(255, 255, 255, 0)' },
+                            '100%': { boxShadow: '0 0 0 0 rgba(255, 255, 255, 0)' },
+                        },
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        .login-surface {
+            background-color: #09090b;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(120, 120, 120, 0.12), transparent),
+                radial-gradient(ellipse 60% 40% at 100% 100%, rgba(80, 80, 90, 0.08), transparent);
+        }
+        .card-edge {
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+                0 24px 48px -12px rgba(0, 0, 0, 0.45);
+        }
+
+        /* Hide sidebar scrollbar but keep scrolling */
+        .sidebar-scroll {
+            -ms-overflow-style: none; /* IE/Edge legacy */
+            scrollbar-width: none; /* Firefox */
+        }
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+
+        /* Window scroll without visible scrollbar (wheel / touch / keys still work). */
+        .scrollbar-none {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-none::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+        html {
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        @keyframes skeleton-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .skeleton {
+            border-radius: 0.375rem;
+            background: linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0.06) 0%,
+                rgba(255, 255, 255, 0.12) 50%,
+                rgba(255, 255, 255, 0.06) 100%
+            );
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.2s ease-in-out infinite;
+        }
+        .skeleton-line-sm { height: 0.75rem; width: 5rem; }
+        .skeleton-line-lg { height: 1.75rem; width: 3.5rem; }
+        .skeleton-line-xl { height: 2.25rem; width: 100%; max-width: 14rem; }
+        .skeleton-block { height: 10rem; width: 100%; }
+        .dash-event-name {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-word;
+        }
+
+        /* Overrides .data-table nowrap so fixed-column layout can wrap long names/orgs. */
+        #attendance-table tbody td {
+            white-space: normal;
+            word-break: break-word;
+        }
+    </style>
+    <style type="text/tailwindcss">
+        @layer components {
+            .glass-card {
+                @apply bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/80 rounded-2xl;
+                box-shadow:
+                    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+                    0 24px 48px -12px rgba(0, 0, 0, 0.45);
+            }
+            .sidebar {
+                @apply w-[280px] bg-zinc-950/95 backdrop-blur-md border-r border-zinc-800/80 flex flex-col fixed h-screen z-[100] transition-transform duration-300 max-md:-translate-x-full md:translate-x-0;
+            }
+            .sidebar.open {
+                @apply translate-x-0;
+            }
+            .nav-item {
+                @apply flex items-center p-3 mb-1 rounded-lg text-zinc-500 cursor-pointer transition-all duration-200 hover:bg-white/[0.05] hover:text-zinc-100 border-l-4 border-transparent;
+            }
+            .nav-item.active {
+                @apply bg-white/[0.07] text-zinc-50 border-l-zinc-200;
+            }
+            .nav-item.active i {
+                @apply text-zinc-200;
+            }
+            .page-section {
+                @apply hidden opacity-0 translate-y-2 animate-fadeIn;
+            }
+            .page-section.active {
+                @apply block opacity-100 translate-y-0;
+            }
+            .btn {
+                @apply px-5 py-2.5 rounded-lg font-medium cursor-pointer transition-all duration-200 inline-flex items-center justify-center gap-2 border border-transparent text-sm;
+            }
+            .btn-primary {
+                @apply bg-zinc-100 text-zinc-900 hover:bg-white active:scale-[0.99];
+            }
+            .btn-secondary {
+                @apply bg-transparent text-emerald-300/90 border border-emerald-700/50 hover:bg-emerald-950/30;
+            }
+            .btn-outline {
+                @apply bg-transparent border-zinc-700/80 text-zinc-200 hover:bg-white/[0.05];
+            }
+            .btn-sm {
+                @apply px-3 py-1.5 text-xs rounded-md;
+            }
+            .stat-card {
+                @apply p-6 flex items-center gap-5 transition-transform duration-200 hover:-translate-y-0.5 min-w-0;
+            }
+            .stat-icon {
+                @apply w-[52px] h-[52px] rounded-xl flex items-center justify-center text-xl shrink-0 bg-zinc-800 text-zinc-300;
+            }
+            .data-table {
+                @apply w-full border-collapse;
+            }
+            .data-table th, .data-table td {
+                @apply p-4 text-left border-b border-zinc-800/80 transition-colors duration-200 whitespace-nowrap;
+            }
+            .data-table th {
+                @apply text-zinc-500 font-semibold text-xs uppercase tracking-wider;
+            }
+            .data-table tbody tr:hover {
+                @apply bg-white/[0.03];
+            }
+            .data-table td {
+                @apply text-sm text-zinc-200;
+            }
+            .action-btn {
+                @apply bg-transparent border-none text-zinc-500 cursor-pointer text-base mr-3 transition-colors duration-200;
+            }
+            .action-btn.edit:hover { @apply text-zinc-200; }
+            .action-btn.delete:hover { @apply text-rose-400; }
+
+            .badge-status {
+                @apply px-2.5 py-1 rounded-md text-xs font-medium;
+            }
+            .badge-present { @apply bg-emerald-500/15 text-emerald-400; }
+            .badge-late { @apply bg-amber-500/15 text-amber-400; }
+
+            .event-status {
+                @apply px-3 py-1 rounded-full text-[0.65rem] font-semibold tracking-wider uppercase border border-zinc-700/80;
+            }
+            .status-active { @apply bg-emerald-500/10 text-emerald-400 border-emerald-700/40; }
+            .status-closed { @apply bg-zinc-800/50 text-zinc-500 border-zinc-700/50; }
+            .status-upcoming { @apply bg-zinc-800/50 text-zinc-400 border-zinc-600/50; }
+
+            .form-group {
+                @apply flex flex-col gap-1.5;
+            }
+            .form-group label {
+                @apply text-xs text-zinc-500 font-medium uppercase tracking-wider;
+            }
+            .form-control {
+                @apply bg-zinc-900/50 border border-zinc-700/80 text-zinc-100 rounded-lg px-3.5 py-2.5 text-sm outline-none transition-all duration-200;
+            }
+            .form-control:focus {
+                @apply border-zinc-500 shadow-[0_0_0_3px_rgba(255,255,255,0.06)] bg-zinc-900/70;
+            }
+
+            .modal-overlay {
+                @apply fixed inset-0 w-full h-full bg-black/65 backdrop-blur-sm flex items-center justify-center z-[1000] opacity-0 invisible transition-all duration-300;
+            }
+            .modal-overlay.active {
+                @apply opacity-100 visible;
+            }
+            .modal-content {
+                @apply w-[90%] max-w-[500px] transform translate-y-5 transition-transform duration-300;
+            }
+            .modal-overlay.active .modal-content {
+                @apply translate-y-0;
+            }
+
+            .switch { @apply relative inline-block w-[50px] h-[26px] shrink-0; }
+            .switch input { @apply opacity-0 w-0 h-0; }
+            .slider { @apply absolute cursor-pointer inset-0 bg-zinc-800 transition-all duration-300 border border-zinc-700/80 rounded-full; }
+            .slider:before { @apply absolute content-[''] h-[18px] w-[18px] left-[3px] bottom-[3px] bg-zinc-200 transition-all duration-300 rounded-full; }
+            input:checked + .slider { @apply bg-zinc-100 border-zinc-100; }
+            input:checked + .slider:before { @apply translate-x-[24px] bg-zinc-900; }
+
+            .pulse-animation {
+                @apply animate-pulseShadow;
+            }
+        }
+    </style>
+</head>
+
+<body class="font-sans login-surface text-zinc-100 overflow-x-hidden overflow-y-auto min-h-screen flex antialiased scrollbar-none">
+
+    <div class="app-container flex w-full min-h-screen">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="h-[70px] flex items-center px-6 border-b border-zinc-800/80 shrink-0">
+                <div
+                    class="h-9 w-9 rounded-lg border border-zinc-700/80 bg-black/40 flex items-center justify-center mr-3 shrink-0 p-1">
+                    <img src="assets/rbas-logo.png" alt="" width="36" height="36" class="h-full w-full object-contain"
+                        decoding="async">
+                </div>
+                <div class="flex flex-col min-w-0">
+                    <h2 class="text-base font-semibold tracking-tight text-zinc-50 truncate">RBAMS</h2>
+                    <span class="text-[10px] uppercase tracking-wider text-zinc-500">Admin</span>
+                </div>
+            </div>
+
+            <nav
+                class="sidebar-scroll flex-1 overflow-y-auto px-4 py-6">
+                <div class="text-[0.7rem] text-zinc-500 font-semibold tracking-wide mb-2.5 pl-3">Main menu</div>
+                <ul id="nav-list" class="list-none space-y-1">
+                    <li class="nav-item active" data-target="dashboard">
+                        <i class="fa-solid fa-chart-pie w-6 text-center mr-3 text-[1.1rem]"></i>
+                        <span>Dashboard</span>
+                    </li>
+                    <li class="nav-item" data-target="event-management">
+                        <i class="fa-solid fa-calendar-check w-6 text-center mr-3 text-[1.1rem]"></i>
+                        <span>Event Management</span>
+                    </li>
+                    <li class="nav-item" data-target="session-management">
+                        <i class="fa-solid fa-clock w-6 text-center mr-3 text-[1.1rem]"></i>
+                        <span>Sessions</span>
+                    </li>
+                    <li class="nav-item" data-target="attendance-monitoring">
+                        <i class="fa-solid fa-users-viewfinder w-6 text-center mr-3 text-[1.1rem]"></i>
+                        <span>Attendance Monitoring</span>
+                    </li>
+                    <li class="nav-item" data-target="user-device-management">
+                        <i class="fa-solid fa-id-card-clip w-6 text-center mr-3 text-[1.1rem]"></i>
+                        <span>User & Device</span>
+                    </li>
+                    <li class="nav-item" data-target="attendance-reports">
+                        <i class="fa-solid fa-file-contract w-6 text-center mr-3 text-[1.1rem]"></i>
+                        <span>Attendance Reports</span>
+                    </li>
+                    <li class="nav-item" data-target="system-logs">
+                        <i class="fa-solid fa-sliders w-6 text-center mr-3 text-[1.1rem]"></i>
+                        <span>System Logs & Settings</span>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="p-5 border-t border-zinc-800/80 shrink-0">
+                <button type="button" id="btn-logout"
+                    class="w-full flex items-center justify-center gap-2.5 bg-transparent border border-rose-900/50 text-rose-400 py-2.5 rounded-lg cursor-pointer transition-all duration-200 font-medium hover:bg-rose-950/40 hover:border-rose-800/60">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    <span>Log Out</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col md:ml-[280px] w-full max-w-[100vw]">
+            <!-- Top Navigation Bar -->
+            <header
+                class="h-[70px] bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between px-4 md:px-8 sticky top-0 z-50">
+                <div class="flex items-center gap-4">
+                    <button id="sidebar-toggle"
+                        class="md:hidden bg-transparent border-none text-zinc-100 text-xl cursor-pointer">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <img src="assets/rbas-logo.png" alt="" width="32" height="32"
+                        class="hidden sm:block h-8 w-auto object-contain opacity-90 shrink-0" decoding="async">
+                    <h1 id="page-title" class="text-xl font-semibold">Dashboard</h1>
+                </div>
+                <div class="flex items-center gap-4 md:gap-6">
+                    <div class="flex items-center gap-3 select-none" title="Signed in as administrator">
+                        <img src="https://ui-avatars.com/api/?name=Admin+Officer&background=3f3f46&color=e4e4e7&rounded=true"
+                            alt="" class="w-9 h-9 rounded-full border-2 border-zinc-600" width="36" height="36">
+                        <div class="flex flex-col hidden sm:flex">
+                            <span class="text-[0.9rem] font-semibold">Admin Officer</span>
+                            <span class="text-[0.75rem] text-zinc-500">Super Admin</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Sections Container -->
+            <div class="p-4 md:p-8 flex-1">
+
+                <!-- Section: overview stats, attendance rate chart, recent events -->
+                <section id="dashboard" class="page-section active">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold">Overview</h2>
+                        <p class="text-[0.9rem] text-zinc-500 mt-1">Real-time update of system statistics.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 min-w-0">
+                        <div class="stat-card glass-card">
+                            <div class="stat-icon"><i
+                                    class="fa-solid fa-calendar-day"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-[0.85rem] text-zinc-500 font-medium">Total Events</h3>
+                                <p class="text-[1.8rem] font-bold mt-1 min-h-[2.25rem] flex items-center" id="dash-total-events">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card glass-card">
+                            <div class="stat-icon"><i
+                                    class="fa-solid fa-tower-broadcast"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-[0.85rem] text-zinc-500 font-medium">Active Event</h3>
+                                <p class="text-base font-bold mt-1 text-zinc-50 leading-snug dash-event-name min-h-[2.75rem]" id="dash-active-event-name" title="">—</p>
+                            </div>
+                        </div>
+                        <div class="stat-card glass-card">
+                            <div class="stat-icon"><i
+                                    class="fa-solid fa-users"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-[0.85rem] text-zinc-500 font-medium">Registered users</h3>
+                                <p class="text-[1.8rem] font-bold mt-1 min-h-[2.25rem] flex items-center" id="dash-total-participants">0</p>
+                            </div>
+                        </div>
+                        <div class="stat-card glass-card border-l-2 border-l-zinc-500">
+                            <div class="stat-icon"><i
+                                    class="fa-solid fa-person-circle-check"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-[0.85rem] text-zinc-500 font-medium">Present (Real-time)</h3>
+                                <p class="text-[1.8rem] font-bold mt-1 text-zinc-50 tabular-nums min-h-[2.25rem] flex items-center"
+                                    id="dash-present-participants">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6 min-w-0">
+                        <div class="glass-card p-6 lg:col-span-2 flex flex-col justify-between min-w-0">
+                            <div class="mb-4">
+                                <h3 class="text-[1.1rem] font-semibold">Attendance rate</h3>
+                                <p class="text-[0.8rem] text-zinc-500 mt-1">Present vs registered users for the active check‑in session.</p>
+                            </div>
+                            <div id="dash-attendance-rate-body" class="min-h-[240px] flex flex-col border border-zinc-800/80 rounded-xl bg-black/20 overflow-hidden min-w-0">
+                            </div>
+                        </div>
+                        <div class="glass-card p-6 lg:col-span-1 min-w-0 flex flex-col">
+                            <h3 class="text-[1.1rem] font-semibold mb-5 shrink-0">Recent Events</h3>
+                            <div id="dash-recent-events-body" class="min-w-0 flex-1 text-sm">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section: events CRUD -->
+                <section id="event-management" class="page-section">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold">Event Management</h2>
+                            <p class="text-[0.9rem] text-zinc-500 mt-1">Manage organization events, seminars, and
+                                assemblies.</p>
+                        </div>
+                        <button class="btn btn-primary" id="btn-create-event">
+                            <i class="fa-solid fa-plus"></i> Create Event
+                        </button>
+                    </div>
+
+                    <div class="glass-card p-6">
+                        <div class="overflow-x-auto">
+                            <table class="data-table" id="event-table">
+                                <thead>
+                                    <tr>
+                                        <th>Event Name</th>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Venue</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section: sessions list + create / close -->
+                <section id="session-management" class="page-section">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold">Sessions</h2>
+                            <p class="text-[0.9rem] text-zinc-500 mt-1">Create check-in / time-out windows for events.</p>
+                        </div>
+                        <button class="btn btn-primary" id="btn-create-session">
+                            <i class="fa-solid fa-plus"></i> Create Session
+                        </button>
+                    </div>
+
+                    <div class="glass-card p-6">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                            <div class="flex gap-3 items-center">
+                                <span class="text-xs uppercase tracking-wider text-zinc-500 font-medium">Show</span>
+                                <select id="session-filter" class="form-control w-[220px]">
+                                    <option value="open">Open sessions</option>
+                                    <option value="all" selected>All sessions</option>
+                                    <option value="closed">Closed sessions</option>
+                                </select>
+                            </div>
+                            <div class="text-xs text-zinc-500" id="session-summary">—</div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="data-table" id="session-table">
+                                <thead>
+                                    <tr>
+                                        <th>Event</th>
+                                        <th>Kind</th>
+                                        <th>Subject</th>
+                                        <th>Section</th>
+                                        <th>Date</th>
+                                        <th>Start</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section: live session attendance + network scan controls (max width keeps table readable at 100% zoom) -->
+                <section id="attendance-monitoring" class="page-section min-w-0">
+                    <div class="max-w-5xl w-full min-w-0 space-y-6">
+                    <div class="flex flex-col gap-5 mb-0 min-w-0 max-w-full">
+                        <div class="min-w-0">
+                            <h2 class="text-2xl font-bold">Live Attendance Monitoring</h2>
+                            <p class="text-[0.9rem] text-zinc-500 mt-1" id="monitor-active-event">Active: —</p>
+                            <p class="text-[0.75rem] text-zinc-500 mt-2 leading-relaxed" id="monitor-help-hint">
+                                Press <strong class="text-zinc-400">Start scanning</strong> to probe Wi‑Fi and match devices to this session every few seconds; press <strong class="text-zinc-400">Stop scanning</strong> when you are done.
+                            </p>
+                        </div>
+                        <div class="w-full min-w-0 flex flex-col gap-3">
+                            <div class="form-group w-full min-w-0">
+                                <label>Active Session</label>
+                                <select class="form-control w-full min-w-0 max-w-full" id="active-session-selector">
+                                    <option value="" selected disabled>No open sessions</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-wrap gap-2 w-full min-w-0 items-center">
+                                <button type="button" class="btn btn-secondary shrink-0" id="btn-start-monitor-scan">
+                                    <i class="fa-solid fa-satellite-dish"></i> Start scanning
+                                </button>
+                                <button type="button" class="btn btn-outline shrink-0 hidden border-rose-500/40 text-rose-300 hover:bg-rose-950/40" id="btn-stop-monitor-scan">
+                                    <i class="fa-solid fa-stop"></i> Stop scanning
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="monitor-active-scan-panel" class="hidden rounded-xl border border-emerald-500/40 bg-emerald-950/25 px-4 py-3 shadow-[0_0_28px_-10px_rgba(16,185,129,0.4)]">
+                        <div class="flex items-start gap-3">
+                            <span class="relative flex h-3 w-3 mt-1.5 shrink-0" aria-hidden="true">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-400"></span>
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-semibold text-zinc-100">Network scan running</p>
+                                <p class="text-xs text-zinc-500 mt-1">Probing the hotspot/LAN and matching MAC addresses to registered users for the selected session.</p>
+                                <p class="text-[0.7rem] text-emerald-400/90 mt-2 font-mono tabular-nums" id="monitor-last-probe-pht"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="monitor-present-card"
+                        class="p-6 flex items-center gap-6 bg-zinc-900/60 rounded-2xl border border-zinc-800/80 mb-0 w-full max-w-md transition-shadow duration-300">
+                        <div
+                            class="w-3 h-3 bg-emerald-500/90 rounded-full shadow-[0_0_0_0_rgba(16,185,129,0.5)] animate-pulseLive">
+                        </div>
+                        <div>
+                            <h3 class="text-[1rem] text-zinc-500 uppercase tracking-wider font-semibold">Present Count
+                            </h3>
+                            <div class="text-[2.5rem] font-bold tracking-tight text-white leading-none mt-1"
+                                id="live-present-count">0</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-6 min-w-0">
+                        <div class="overflow-x-auto rounded-xl border border-zinc-800/60 bg-black/20">
+                            <table class="data-table table-fixed w-full max-w-full" id="attendance-table">
+                                <colgroup>
+                                    <col class="w-[28%]" />
+                                    <col class="w-[22%]" />
+                                    <col class="w-[18%]" />
+                                    <col class="w-[18%]" />
+                                    <col class="w-[14%]" />
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th class="!whitespace-normal align-bottom">User name</th>
+                                        <th class="!whitespace-normal align-bottom">Organization</th>
+                                        <th class="!whitespace-normal align-bottom">Device Status</th>
+                                        <th class="!whitespace-normal align-bottom">Time In</th>
+                                        <th class="!whitespace-normal align-bottom">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    </div>
+                </section>
+
+                <!-- Section: registered users, MAC, search -->
+                <section id="user-device-management" class="page-section">
+                    <div class="flex flex-col xl:flex-row justify-between xl:items-end gap-5 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold">User & Device Management</h2>
+                            <p class="text-[0.9rem] text-zinc-500 mt-1">Manage registered MAC addresses and user
+                                accounts.</p>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+                            <div
+                                class="flex items-center bg-black/20 border border-zinc-800/80 rounded-lg px-4 py-2 w-full sm:w-[300px]">
+                                <i class="fa-solid fa-search text-zinc-500 mr-3"></i>
+                                <input type="text" id="device-search-input" placeholder="Search by name, ID, or MAC…"
+                                    class="bg-transparent border-none outline-none text-zinc-100 w-full font-sans">
+                            </div>
+                            <button class="btn btn-primary whitespace-nowrap" id="btn-register-device">
+                                <i class="fa-solid fa-laptop-medical"></i> Register user
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-6">
+                        <div class="overflow-x-auto">
+                            <table class="data-table" id="device-table">
+                                <thead>
+                                    <tr>
+                                        <th>User name</th>
+                                        <th>Registered Device ID</th>
+                                        <th>Registration Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section: per-event report table + CSV/PDF export -->
+                <section id="attendance-reports" class="page-section">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold">Attendance Reports</h2>
+                            <p class="text-[0.9rem] text-zinc-500 mt-1">Generate and export attendance summaries.</p>
+                        </div>
+                        <div class="flex gap-3 w-full sm:w-auto">
+                            <button type="button" class="btn btn-outline flex-1 sm:flex-none" id="btn-export-pdf"><i
+                                    class="fa-solid fa-file-pdf text-rose-400"></i> Export PDF</button>
+                            <button type="button" class="btn btn-outline flex-1 sm:flex-none" id="btn-export-csv"><i
+                                    class="fa-solid fa-table text-emerald-400"></i> Export CSV</button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-5 mb-6 flex flex-col md:flex-row justify-between md:items-center gap-5">
+                        <div class="form-group w-full md:w-[300px]">
+                            <label>Select Event</label>
+                            <select class="form-control" id="report-event-selector">
+                                <option value="" selected disabled>Select event</option>
+                            </select>
+                        </div>
+                        <div
+                            class="flex gap-6 text-[0.95rem] bg-black/20 px-5 py-3 rounded-xl border border-zinc-800/80 flex-wrap">
+                            <div>Total: <strong class="text-xl" id="report-total">0</strong></div>
+                            <div class="text-emerald-400">Present: <strong class="text-xl text-zinc-100" id="report-present">0</strong></div>
+                            <div class="text-rose-400">Absent: <strong class="text-xl text-zinc-100" id="report-absent">0</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-6">
+                        <div class="overflow-x-auto">
+                            <table class="data-table" id="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>User name</th>
+                                        <th>Organization</th>
+                                        <th>Time In</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section: activity log + registration modal hook -->
+                <section id="system-logs" class="page-section">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold">System Logs & Settings</h2>
+                        <p class="text-[0.9rem] text-zinc-500 mt-1">Configure system behavior and review activity
+                            logs.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="glass-card p-6">
+                            <h3 class="text-[1.1rem] font-semibold mb-4 border-b border-zinc-800/80 pb-3">System
+                                Settings</h3>
+
+                            <div class="flex justify-between items-center py-4 border-b border-zinc-800/80">
+                                <div class="pr-4">
+                                    <h4 class="text-[0.95rem] font-medium">Enable Attendance Automation</h4>
+                                    <p class="text-[0.8rem] text-zinc-500 mt-1">Automatically mark users as
+                                        absent if not scanned within 30 mins.</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="flex justify-between items-center py-4 border-b border-zinc-800/80">
+                                <div class="pr-4">
+                                    <h4 class="text-[0.95rem] font-medium">Allow Manual Override</h4>
+                                    <p class="text-[0.8rem] text-zinc-500 mt-1">Allow admins to manually mark
+                                        attendance.</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="flex justify-between items-center py-4">
+                                <div class="pr-4">
+                                    <h4 class="text-[0.95rem] font-medium">Strict Device Policy</h4>
+                                    <p class="text-[0.8rem] text-zinc-500 mt-1">Prevent multiple logins from the same
+                                        device ID.</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="glass-card p-6">
+                            <h3 class="text-[1.1rem] font-semibold mb-4 border-b border-zinc-800/80 pb-3">Activity Logs
+                            </h3>
+                            <ul class="list-none flex flex-col max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10"
+                                id="activity-log-list">
+                                <!-- Populated by JS -->
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Create Event Modal -->
+    <div class="modal-overlay" id="modal-create-event">
+        <div class="modal-content glass-card p-0">
+            <div class="p-5 border-b border-zinc-800/80 flex justify-between items-center bg-black/10 rounded-t-2xl">
+                <h2 class="text-xl font-bold" id="modal-event-title">Create New Event</h2>
+                <button
+                    class="btn-close text-xl text-zinc-500 hover:text-white transition-colors bg-transparent border-none cursor-pointer"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="evt-editing-id" value="">
+                <div class="form-group mb-4">
+                    <label>Event Name</label>
+                    <input type="text" id="evt-name" class="form-control" placeholder="e.g. Annual Assembly">
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="evt-date" class="form-control" style="color-scheme: dark;">
+                    </div>
+                    <div class="form-group">
+                        <label>Time</label>
+                        <input type="time" id="evt-time" class="form-control" style="color-scheme: dark;">
+                    </div>
+                </div>
+                <div class="form-group mb-6">
+                    <label>Venue</label>
+                    <input type="text" id="evt-venue" class="form-control" placeholder="e.g. Main Hall">
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-zinc-800/80 mt-4">
+                    <button class="btn btn-outline btn-close-modal">Cancel</button>
+                    <button class="btn btn-primary" id="btn-save-event">Create Event</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Session Modal -->
+    <div class="modal-overlay" id="modal-create-session">
+        <div class="modal-content glass-card p-0">
+            <div class="p-5 border-b border-zinc-800/80 flex justify-between items-center bg-black/10 rounded-t-2xl">
+                <h2 class="text-xl font-bold">Create Session</h2>
+                <button
+                    class="btn-close text-xl text-zinc-500 hover:text-white transition-colors bg-transparent border-none cursor-pointer"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6">
+                <div class="form-group mb-4">
+                    <label>Event</label>
+                    <select id="sess-event" class="form-control text-zinc-100">
+                        <option value="" disabled selected>No events yet</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="form-group">
+                        <label>Session Type</label>
+                        <select id="sess-kind" class="form-control text-zinc-100">
+                            <option value="check_in">Time in</option>
+                            <option value="time_out">Time out</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Label (optional)</label>
+                        <input id="sess-label" type="text" class="form-control" placeholder="e.g. Morning" />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input id="sess-date" type="date" class="form-control" style="color-scheme: dark;" />
+                    </div>
+                    <div class="form-group">
+                        <label>Start time</label>
+                        <input id="sess-start" type="time" class="form-control" style="color-scheme: dark;" />
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-zinc-800/80 mt-4">
+                    <button class="btn btn-outline btn-close-modal">Cancel</button>
+                    <button class="btn btn-primary" id="btn-save-session">Create Session</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Device Modal -->
+    <div class="modal-overlay" id="modal-register-device">
+        <div class="modal-content glass-card p-0">
+            <div class="p-5 border-b border-zinc-800/80 flex justify-between items-center bg-black/10 rounded-t-2xl">
+                <h2 class="text-xl font-bold">Register user &amp; device</h2>
+                <button
+                    class="btn-close text-xl text-zinc-500 hover:text-white transition-colors bg-transparent border-none cursor-pointer"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6">
+                <!-- Dropdowns and Inputs for student registration -->
+                <div class="form-group mb-4">
+                    <label>Full Name</label>
+                    <input type="text" id="admin-reg-name" class="form-control" placeholder="e.g. Jane Doe" required>
+                </div>
+
+                <div class="form-group mb-4">
+                    <label>Student Number</label>
+                    <input type="text" id="admin-reg-studentid" class="form-control" placeholder="e.g. 22-123456"
+                        required>
+                </div>
+
+                <div class="form-group mb-4">
+                    <label>MAC Address</label>
+                    <input type="text" id="admin-reg-mac" class="form-control" placeholder="e.g. 00:1A:2B:3C:4D:5E"
+                        required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="form-group">
+                        <label>College</label>
+                        <select id="admin-reg-college" class="form-control text-zinc-100">
+                            <option value="ccs" class="bg-zinc-950">College of Computing Information and Sciences (CCIS)
+                            </option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Course</label>
+                        <select id="admin-reg-course" class="form-control text-zinc-100">
+                            <option value="" disabled selected class="bg-zinc-950">Select Course</option>
+                            <option value="bscs" class="bg-zinc-950">BS Computer Science (CS)</option>
+                            <option value="bsit" class="bg-zinc-950">BS Information Tech (IT)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="form-group">
+                        <label>Year Level</label>
+                        <select id="admin-reg-year" class="form-control text-zinc-100">
+                            <option value="" disabled selected class="bg-zinc-950">Select Year</option>
+                            <option value="1" class="bg-zinc-950">1st Year</option>
+                            <option value="2" class="bg-zinc-950">2nd Year</option>
+                            <option value="3" class="bg-zinc-950">3rd Year</option>
+                            <option value="4" class="bg-zinc-950">4th Year</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Section</label>
+                        <select id="admin-reg-section" class="form-control text-zinc-100">
+                            <option value="" disabled selected class="bg-zinc-950">Select Section</option>
+                            <option value="A" class="bg-zinc-950">Section A</option>
+                            <option value="B" class="bg-zinc-950">Section B</option>
+                            <option value="C" class="bg-zinc-950">Section C</option>
+                            <option value="D" class="bg-zinc-950">Section D</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-zinc-800/80 mt-4">
+                    <button class="btn btn-outline btn-close-modal">Cancel</button>
+                    <button class="btn btn-primary" id="btn-save-device">Save registration</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js (dashboard donut), jsPDF + autotable (report PDF), then app logic. -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js" defer></script>
+    <script src="admin.js" defer></script>
+</body>
+
+</html>

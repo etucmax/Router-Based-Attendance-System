@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<!-- RBAMS login: officer sign-in + manual attendance (markup; script.js, switchForm for tabs). -->
+<html lang="en" class="scrollbar-none">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RBAMS — Route-Based Attendance Monitoring</title>
+    <link rel="icon" href="assets/rbas-logo.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        fadeIn: 'fadeIn 0.45s ease forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(8px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        .login-surface {
+            background-color: #09090b;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(120, 120, 120, 0.12), transparent),
+                radial-gradient(ellipse 60% 40% at 100% 100%, rgba(80, 80, 90, 0.08), transparent);
+        }
+        .card-edge {
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+                0 24px 48px -12px rgba(0, 0, 0, 0.45);
+        }
+        .tab-active {
+            background: rgba(255, 255, 255, 0.09);
+            color: #fafafa;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        }
+        .tab-inactive {
+            background: transparent;
+            color: #71717a;
+        }
+        .tab-inactive:hover {
+            color: #a1a1aa;
+        }
+        .input-field {
+            width: 100%;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(63, 63, 70, 0.8);
+            background: rgba(24, 24, 27, 0.5);
+            padding: 0.75rem 0.875rem;
+            font-size: 15px;
+            color: #f4f4f5;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+        }
+        .input-field::placeholder {
+            color: #52525b;
+        }
+        .input-field:focus {
+            border-color: rgba(161, 161, 170, 0.55);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+            background-color: rgba(24, 24, 27, 0.65);
+        }
+        .spinner {
+            width: 1.125rem;
+            height: 1.125rem;
+            border: 2px solid rgba(161, 161, 170, 0.25);
+            border-top-color: rgba(250, 250, 250, 0.75);
+            border-radius: 50%;
+            animation: spin 0.65s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* Scroll without showing scrollbars (wheel / touch / keyboard still work). */
+        .scrollbar-none {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-none::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+        html {
+            height: 100%;
+            margin: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            box-sizing: border-box;
+            min-height: 100%;
+            min-height: 100dvh;
+        }
+        *, *::before, *::after {
+            box-sizing: inherit;
+        }
+    </style>
+</head>
+
+<body class="login-surface text-zinc-100 font-sans min-h-dvh flex flex-col items-center justify-start px-4 py-6 sm:py-10 antialiased scrollbar-none">
+
+    <main class="w-full max-w-[420px] relative z-10 flex flex-col shrink-0 my-auto">
+        <div class="flex flex-col items-center mb-3 shrink-0">
+            <img src="assets/rbas-logo.png" alt="RBAMS — Route-Based Attendance Monitoring System" width="160" height="160"
+                class="h-14 sm:h-16 w-auto object-contain select-none" decoding="async">
+            <h1 class="sr-only">RBAMS — Route-Based Attendance Monitoring System</h1>
+            <p class="mt-2 text-center text-[1.05rem] sm:text-lg font-semibold tracking-tight text-zinc-50 leading-snug px-1">RBAMS</p>
+            <p class="mt-1.5 text-center text-[0.7rem] sm:text-[0.75rem] text-zinc-500 leading-snug px-3 max-w-[22rem] mx-auto">Route-Based Attendance Monitoring System</p>
+        </div>
+
+        <div class="rounded-2xl bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/80 px-5 pt-5 pb-7 sm:px-6 sm:pt-6 sm:pb-8 card-edge min-h-0 flex flex-col overflow-x-hidden">
+            <div class="flex rounded-lg bg-zinc-950/80 p-1 border border-zinc-800/60 mb-5 shrink-0">
+                <button type="button"
+                    class="tab-active flex-1 border-0 rounded-md py-2.5 text-sm font-medium cursor-pointer transition-colors duration-200"
+                    id="btn-login" onclick="switchForm('login')">Officer sign-in</button>
+                <button type="button"
+                    class="tab-inactive flex-1 border-0 rounded-md py-2.5 text-sm font-medium cursor-pointer transition-colors duration-200"
+                    id="btn-attendance" onclick="switchForm('attendance')">Manual attendance</button>
+            </div>
+
+            <!-- LOGIN -->
+            <form id="form-login" class="block animate-fadeIn min-h-0">
+                <div class="mb-4">
+                    <h2 class="text-base font-semibold text-zinc-50 tracking-tight">Welcome back</h2>
+                    <p class="text-xs text-zinc-500 mt-0.5">Use your administrator credentials.</p>
+                </div>
+
+                <div class="space-y-3.5">
+                    <div class="input-group">
+                        <label for="login-student-id" class="block text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Username</label>
+                        <input type="text" id="login-student-id" class="input-field" required autocomplete="username">
+                    </div>
+                    <div class="input-group">
+                        <label for="login-password" class="block text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Password</label>
+                        <input type="password" id="login-password" class="input-field" required autocomplete="current-password">
+                    </div>
+                </div>
+
+                <p class="text-[11px] text-zinc-600 mt-3 text-center leading-tight">Restricted access.</p>
+
+                <input type="hidden" name="login-role" value="officer" id="login-role-hidden">
+
+                <button type="submit"
+                    class="w-full mt-5 rounded-lg bg-zinc-100 text-zinc-900 text-sm font-semibold py-3 cursor-pointer border-0 transition-[background-color,transform] duration-200 hover:bg-white active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900"
+                    id="submit-login">Sign in</button>
+            </form>
+
+            <!-- MANUAL ATTENDANCE -->
+            <form id="form-attendance" class="hidden opacity-0 translate-y-2 animate-fadeIn min-h-0 flex flex-col">
+                <div class="mb-4 shrink-0">
+                    <h2 class="text-base font-semibold text-zinc-50 tracking-tight">Manual attendance</h2>
+                    <p class="text-xs text-zinc-500 mt-0.5">Session, type, then student number.</p>
+                </div>
+
+                <div class="space-y-4 shrink-0">
+                    <div class="relative input-group">
+                        <label for="att-event" class="block text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Session</label>
+                        <div class="relative">
+                            <select id="att-event"
+                                class="input-field appearance-none pr-10 cursor-pointer"
+                                required>
+                                <option value="" disabled selected class="bg-zinc-900 text-zinc-500">Loading sessions…</option>
+                            </select>
+                            <span class="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="block text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">Type</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="att-type" value="in" class="peer sr-only" checked>
+                                <div class="rounded-lg border border-zinc-700/80 bg-zinc-900/30 py-2.5 text-center text-sm font-medium text-zinc-500 transition-all peer-checked:border-emerald-600/50 peer-checked:bg-emerald-950/30 peer-checked:text-emerald-200/90">
+                                    Time in
+                                </div>
+                            </label>
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="att-type" value="out" class="peer sr-only">
+                                <div class="rounded-lg border border-zinc-700/80 bg-zinc-900/30 py-2.5 text-center text-sm font-medium text-zinc-500 transition-all peer-checked:border-rose-600/50 peer-checked:bg-rose-950/25 peer-checked:text-rose-200/90">
+                                    Time out
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="att-studentid" class="block text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">Student number</label>
+                        <div class="relative">
+                            <input type="text" id="att-studentid" class="input-field" placeholder="e.g. 22-123456" required autocomplete="off">
+                            <div id="att-loading" class="absolute right-3.5 top-1/2 -translate-y-1/2 hidden pointer-events-none" aria-hidden="true">
+                                <div class="spinner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="att-student-info"
+                    class="hidden animate-fadeIn mt-5 rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-3.5 mb-6 shrink-0">
+                    <div class="flex justify-between items-start gap-3 mb-3 pb-3 border-b border-zinc-800/80">
+                        <h3 class="font-semibold text-[15px] text-zinc-100 leading-snug pr-2" id="att-display-name">—</h3>
+                        <span class="shrink-0 text-[11px] tabular-nums text-zinc-400 px-2 py-1 rounded-md bg-zinc-900/80 border border-zinc-800" id="att-display-time">—</span>
+                    </div>
+                    <dl class="grid grid-cols-2 gap-x-5 gap-y-2.5 text-xs leading-snug">
+                        <div><dt class="text-zinc-600">College</dt><dd class="text-zinc-200 mt-0.5" id="att-display-college">—</dd></div>
+                        <div><dt class="text-zinc-600">Course</dt><dd class="text-zinc-200 mt-0.5" id="att-display-course">—</dd></div>
+                        <div><dt class="text-zinc-600">Year</dt><dd class="text-zinc-200 mt-0.5" id="att-display-year">—</dd></div>
+                        <div><dt class="text-zinc-600">Section</dt><dd class="text-zinc-200 mt-0.5" id="att-display-section">—</dd></div>
+                    </dl>
+                </div>
+
+                <button type="submit" disabled id="submit-attendance"
+                    class="w-full mt-8 shrink-0 rounded-lg bg-zinc-100 text-zinc-900 text-sm font-semibold py-3.5 cursor-pointer border-0 transition-all duration-200 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900">
+                    Submit attendance
+                </button>
+            </form>
+        </div>
+    </main>
+    <script src="script.js"></script>
+</body>
+
+</html>
